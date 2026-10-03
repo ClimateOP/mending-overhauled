@@ -4,8 +4,8 @@ import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.core.Holder;
 import net.minecraft.world.inventory.Slot;
-import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.Enchantments;
+import net.minecraft.world.item.enchantment.Enchantment;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Invoker;
 import org.spongepowered.asm.mixin.injection.At;
@@ -34,6 +34,13 @@ public abstract class ExampleClientMixin {
 
 				if (mending != null) {
 					System.out.println("Item has Mending!");
+
+					if (slot.getItem().isDamaged()) {
+						System.out.println("Item is damaged!");
+					} else {
+						System.out.println("Item is NOT damaged.");
+					}
+
 				} else {
 					System.out.println("Item does NOT have Mending.");
 				}
