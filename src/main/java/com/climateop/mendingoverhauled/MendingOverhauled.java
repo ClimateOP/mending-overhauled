@@ -5,18 +5,16 @@ import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.core.Holder;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.Enchantments;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import net.minecraft.resources.Identifier;
 
 public class MendingOverhauled implements ModInitializer {
 
 	public static final String MOD_ID = "mending-overhauled";
-
-	public static final Logger LOGGER =
-			LoggerFactory.getLogger(MOD_ID);
 
 	@Override
 	public void onInitialize() {
@@ -32,8 +30,8 @@ public class MendingOverhauled implements ModInitializer {
 
 					int slotIndex = payload.slotIndex();
 
-					if (slotIndex < 0 ||
-							slotIndex >= player.containerMenu.slots.size()) {
+					if (slotIndex < 0
+							|| slotIndex >= player.containerMenu.slots.size()) {
 						return;
 					}
 
@@ -61,9 +59,6 @@ public class MendingOverhauled implements ModInitializer {
 						return;
 					}
 
-					// 7 XP per tick
-					// 1 XP = 2 durability
-					// 14 durability per tick
 					int xpToUse = Math.min(7, availableXp);
 
 					int durabilityToRepair = xpToUse * 2;
@@ -91,8 +86,20 @@ public class MendingOverhauled implements ModInitializer {
 					);
 
 					slot.setChanged();
-
 					player.containerMenu.broadcastChanges();
+
+					if (player.tickCount % 10 == 0) {
+						player.level().playSound(
+								null,
+								player.getX(),
+								player.getY(),
+								player.getZ(),
+								SoundEvents.EXPERIENCE_ORB_PICKUP,
+								SoundSource.PLAYERS,
+								0.25F,
+								1.4F
+						);
+					}
 				}
 		);
 	}
@@ -118,8 +125,8 @@ public class MendingOverhauled implements ModInitializer {
 		return xp;
 	}
 
-	public static net.minecraft.resources.Identifier id(String path) {
-		return net.minecraft.resources.Identifier.fromNamespaceAndPath(
+	public static Identifier id(String path) {
+		return Identifier.fromNamespaceAndPath(
 				MOD_ID,
 				path
 		);
