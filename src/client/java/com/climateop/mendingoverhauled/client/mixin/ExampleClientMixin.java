@@ -12,57 +12,129 @@ import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.gen.Invoker;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(AbstractContainerScreen.class)
 public abstract class ExampleClientMixin {
 
+	@Unique
+	private boolean mendingOverhauled$middleMouseHeld = false;
+
+	@Unique
+	private double mendingOverhauled$mouseX = 0;
+
+	@Unique
+	private double mendingOverhauled$mouseY = 0;
+
 	@Invoker("getHoveredSlot")
 	public abstract Slot mendingOverhauled$getHoveredSlot(double x, double y);
 
 	@Inject(method = "mouseClicked", at = @At("HEAD"))
-	private void onMouseClicked(MouseButtonEvent event, boolean doubleClick, CallbackInfoReturnable<Boolean> cir) {
+	private void onMouseClicked(
+			MouseButtonEvent event,
+			boolean doubleClick,
+			CallbackInfoReturnable<Boolean> cir
+	) {
 		if (event.button() == 2) {
-			Slot slot = mendingOverhauled$getHoveredSlot(event.x(), event.y());
+			mendingOverhauled$middleMouseHeld = true;
 
-			if (slot != null) {
-				Holder<Enchantment> mending = slot.getItem()
-						.getEnchantments()
-						.keySet()
-						.stream()
-						.filter(holder -> holder.is(Enchantments.MENDING))
-						.findFirst()
-						.orElse(null);
+			mendingOverhauled$mouseX = event.x();
+			mendingOverhauled$mouseY = event.y();
 
-				if (mending != null && slot.getItem().isDamaged()) {
-					Minecraft minecraft = Minecraft.getInstance();
-
-					if (minecraft.player != null) {
-						int availableXp = getAvailableXp(minecraft.player);
-
-						int durabilityNeeded = slot.getItem().getDamageValue();
-
-						int xpRequired = (int) Math.ceil(durabilityNeeded / 2.0);
-
-						int xpToUse = Math.min(availableXp, xpRequired);
-						int durabilityToRepair = xpToUse * 2;
-
-						minecraft.player.giveExperiencePoints(-xpToUse);
-
-						slot.getItem().setDamageValue(
-								Math.max(0, slot.getItem().getDamageValue() - durabilityToRepair)
-						);
-
-						System.out.println("XP used: " + xpToUse);
-						System.out.println("Durability repaired: " + durabilityToRepair);
-					}
-				}
-			}
+			System.out.println("Middle mouse held!");
 		}
 	}
 
+	@Inject(method = "mouseReleased", at = @At("HEAD"))
+	private void onMouseReleased(
+			MouseButtonEvent event,
+			CallbackInfoReturnable<Boolean> cir
+	) {
+		if (event.button() == 2) {
+			mendingOverhauled$middleMouseHeld = false;
+
+			System.out.println("Middle mouse released!");
+		}
+	}
+
+	@Inject(method = "containerTick", at = @At("HEAD"))
+	private void onContainerTick(CallbackInfo ci) {
+		if (!mendingOverhauled$middleMouseHeld) {
+			return;
+		}
+
+		Minecraft minecraft = Minecraft.getInstance();
+
+		if (minecraft.player == null) {
+			return;
+		}
+
+		Slot slot = mendingOverhauled$getHoveredSlot(
+				mendingOverhauled$mouseX,
+				mendingOverhauled$mouseY
+		);
+
+		if (slot == null || slot.getItem().isEmpty()) {
+			return;
+		}
+
+		Holder<Enchantment> mending = slot.getItem()
+				.getEnchantments()
+				.keySet()
+				.stream()
+				.filter(holder -> holder.is(Enchantments.MENDING))
+				.findFirst()
+				.orElse(null);
+
+		if (mending == null || !slot.getItem().isDamaged()) {
+			return;
+		}
+
+		int availableXp = getAvailableXp(minecraft.player);
+
+		if (availableXp <= 0) {
+			return;
+		}
+
+		// 7 XP per tick = 14 durability per tick
+		// 20 ticks per second = 280 durability per second
+		int xpToUse = Math.min(7, availableXp);
+
+		int durabilityToRepair = xpToUse * 2;
+
+		int currentDamage = slot.getItem().getDamageValue();
+
+		durabilityToRepair = Math.min(
+				durabilityToRepair,
+				currentDamage
+		);
+
+		if (durabilityToRepair <= 0) {
+			return;
+		}
+
+		xpToUse = (durabilityToRepair + 1) / 2;
+
+		minecraft.player.giveExperiencePoints(-xpToUse);
+
+		slot.getItem().setDamageValue(
+				Math.max(
+						0,
+						currentDamage - durabilityToRepair
+				)
+		);
+	}
+
+	@Inject(method = "removed", at = @At("HEAD"))
+	private void onRemoved(CallbackInfo ci) {
+		mendingOverhauled$middleMouseHeld = false;
+	}
+
 	@Unique
-	private int getAvailableXp(net.minecraft.client.player.LocalPlayer player) {
+	private int getAvailableXp(
+			net.minecraft.client.player.LocalPlayer player
+	) {
 		int xp = 0;
 
 		for (int level = 0; level < player.experienceLevel; level++) {
@@ -75,7 +147,10 @@ public abstract class ExampleClientMixin {
 			}
 		}
 
-		xp += (int) (player.experienceProgress * player.getXpNeededForNextLevel());
+		xp += (int) (
+				player.experienceProgress
+						* player.getXpNeededForNextLevel()
+		);
 
 		return xp;
 	}
