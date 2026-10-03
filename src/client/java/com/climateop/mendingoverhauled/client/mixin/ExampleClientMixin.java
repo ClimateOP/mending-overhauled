@@ -1,12 +1,11 @@
 package com.climateop.mendingoverhauled.client.mixin;
 
+import com.climateop.mendingoverhauled.MendingRepairPayload;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.input.MouseButtonEvent;
-import net.minecraft.core.Holder;
 import net.minecraft.world.inventory.Slot;
-import net.minecraft.world.item.enchantment.Enchantment;
-import net.minecraft.world.item.enchantment.Enchantments;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.gen.Invoker;
@@ -21,14 +20,11 @@ public abstract class ExampleClientMixin {
 	@Unique
 	private boolean mendingOverhauled$middleMouseHeld = false;
 
-	@Unique
-	private double mendingOverhauled$mouseX = 0;
-
-	@Unique
-	private double mendingOverhauled$mouseY = 0;
-
 	@Invoker("getHoveredSlot")
-	public abstract Slot mendingOverhauled$getHoveredSlot(double x, double y);
+	public abstract Slot mendingOverhauled$getHoveredSlot(
+			double x,
+			double y
+	);
 
 	@Inject(method = "mouseClicked", at = @At("HEAD"))
 	private void onMouseClicked(
@@ -38,11 +34,6 @@ public abstract class ExampleClientMixin {
 	) {
 		if (event.button() == 2) {
 			mendingOverhauled$middleMouseHeld = true;
-
-			mendingOverhauled$mouseX = event.x();
-			mendingOverhauled$mouseY = event.y();
-
-			System.out.println("Middle mouse held!");
 		}
 	}
 
@@ -53,8 +44,6 @@ public abstract class ExampleClientMixin {
 	) {
 		if (event.button() == 2) {
 			mendingOverhauled$middleMouseHeld = false;
-
-			System.out.println("Middle mouse released!");
 		}
 	}
 
@@ -70,88 +59,42 @@ public abstract class ExampleClientMixin {
 			return;
 		}
 
+		double mouseX = minecraft.mouseHandler.xpos();
+		double mouseY = minecraft.mouseHandler.ypos();
+
+		double scaledX = mouseX
+				* minecraft.getWindow().getGuiScaledWidth()
+				/ minecraft.getWindow().getWidth();
+
+		double scaledY = mouseY
+				* minecraft.getWindow().getGuiScaledHeight()
+				/ minecraft.getWindow().getHeight();
+
 		Slot slot = mendingOverhauled$getHoveredSlot(
-				mendingOverhauled$mouseX,
-				mendingOverhauled$mouseY
+				scaledX,
+				scaledY
 		);
 
-		if (slot == null || slot.getItem().isEmpty()) {
+		if (slot == null) {
 			return;
 		}
 
-		Holder<Enchantment> mending = slot.getItem()
-				.getEnchantments()
-				.keySet()
-				.stream()
-				.filter(holder -> holder.is(Enchantments.MENDING))
-				.findFirst()
-				.orElse(null);
+		AbstractContainerScreen<?> screen =
+				(AbstractContainerScreen<?>) (Object) this;
 
-		if (mending == null || !slot.getItem().isDamaged()) {
+		int slotIndex = screen.getMenu().slots.indexOf(slot);
+
+		if (slotIndex < 0) {
 			return;
 		}
 
-		int availableXp = getAvailableXp(minecraft.player);
-
-		if (availableXp <= 0) {
-			return;
-		}
-
-		// 7 XP per tick = 14 durability per tick
-		// 20 ticks per second = 280 durability per second
-		int xpToUse = Math.min(7, availableXp);
-
-		int durabilityToRepair = xpToUse * 2;
-
-		int currentDamage = slot.getItem().getDamageValue();
-
-		durabilityToRepair = Math.min(
-				durabilityToRepair,
-				currentDamage
-		);
-
-		if (durabilityToRepair <= 0) {
-			return;
-		}
-
-		xpToUse = (durabilityToRepair + 1) / 2;
-
-		minecraft.player.giveExperiencePoints(-xpToUse);
-
-		slot.getItem().setDamageValue(
-				Math.max(
-						0,
-						currentDamage - durabilityToRepair
-				)
+		ClientPlayNetworking.send(
+				new MendingRepairPayload(slotIndex)
 		);
 	}
 
 	@Inject(method = "removed", at = @At("HEAD"))
 	private void onRemoved(CallbackInfo ci) {
 		mendingOverhauled$middleMouseHeld = false;
-	}
-
-	@Unique
-	private int getAvailableXp(
-			net.minecraft.client.player.LocalPlayer player
-	) {
-		int xp = 0;
-
-		for (int level = 0; level < player.experienceLevel; level++) {
-			if (level >= 30) {
-				xp += 112 + (level - 30) * 9;
-			} else if (level >= 15) {
-				xp += 37 + (level - 15) * 5;
-			} else {
-				xp += 7 + level * 2;
-			}
-		}
-
-		xp += (int) (
-				player.experienceProgress
-						* player.getXpNeededForNextLevel()
-		);
-
-		return xp;
 	}
 }
