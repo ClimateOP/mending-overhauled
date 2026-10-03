@@ -8,6 +8,7 @@ import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.Enchantments;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.gen.Invoker;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -37,10 +38,45 @@ public abstract class ExampleClientMixin {
 					Minecraft minecraft = Minecraft.getInstance();
 
 					if (minecraft.player != null) {
-						System.out.println("Player XP level: " + minecraft.player.experienceLevel);
+						int availableXp = getAvailableXp(minecraft.player);
+
+						int durabilityNeeded = slot.getItem().getDamageValue();
+
+						int xpRequired = (int) Math.ceil(durabilityNeeded / 2.0);
+
+						int xpToUse = Math.min(availableXp, xpRequired);
+						int durabilityToRepair = xpToUse * 2;
+
+						minecraft.player.giveExperiencePoints(-xpToUse);
+
+						slot.getItem().setDamageValue(
+								Math.max(0, slot.getItem().getDamageValue() - durabilityToRepair)
+						);
+
+						System.out.println("XP used: " + xpToUse);
+						System.out.println("Durability repaired: " + durabilityToRepair);
 					}
 				}
 			}
 		}
+	}
+
+	@Unique
+	private int getAvailableXp(net.minecraft.client.player.LocalPlayer player) {
+		int xp = 0;
+
+		for (int level = 0; level < player.experienceLevel; level++) {
+			if (level >= 30) {
+				xp += 112 + (level - 30) * 9;
+			} else if (level >= 15) {
+				xp += 37 + (level - 15) * 5;
+			} else {
+				xp += 7 + level * 2;
+			}
+		}
+
+		xp += (int) (player.experienceProgress * player.getXpNeededForNextLevel());
+
+		return xp;
 	}
 }
